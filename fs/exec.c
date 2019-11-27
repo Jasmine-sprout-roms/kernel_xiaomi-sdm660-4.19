@@ -77,14 +77,15 @@ int suid_dumpable = 0;
 static LIST_HEAD(formats);
 static DEFINE_RWLOCK(binfmt_lock);
 
-#define ZYGOTE32_BIN "/system/bin/app_process32"
-#define ZYGOTE64_BIN "/system/bin/app_process64"
-static struct task_struct *zygote32_task;
-static struct task_struct *zygote64_task;
+#define ZYGOTE32_BIN	"/system/bin/app_process32"
+#define ZYGOTE64_BIN	"/system/bin/app_process64"
+static atomic_t zygote32_pid;
+static atomic_t zygote64_pid;
 
-bool task_is_zygote(struct task_struct *task)
+bool is_zygote_pid(pid_t pid)
 {
-	return task == zygote32_task || task == zygote64_task;
+	return atomic_read(&zygote32_pid) == pid ||
+		atomic_read(&zygote64_pid) == pid;
 }
 
 void __register_binfmt(struct linux_binfmt * fmt, int insert)
@@ -1845,9 +1846,9 @@ static int __do_execve_file(int fd, struct filename *filename,
 
 	if (capable(CAP_SYS_ADMIN)) {
 		if (unlikely(!strcmp(filename->name, ZYGOTE32_BIN)))
-			zygote32_task = current;
+			atomic_set(&zygote32_pid, current->pid);
 		else if (unlikely(!strcmp(filename->name, ZYGOTE64_BIN)))
-			zygote64_task = current;
+			atomic_set(&zygote64_pid, current->pid);
 	}
 
 	/* execve succeeded */
